@@ -6,6 +6,7 @@ import '../services/calculation_service.dart';
 import '../widgets/chart_widgets.dart';
 import '../utils/constants.dart';
 import '../utils/date_helpers.dart';
+import '../utils/refresh_notifier.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -29,6 +30,13 @@ class DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     _loadData();
+    RefreshNotifier().addListener(refreshData);
+  }
+
+  @override
+  void dispose() {
+    RefreshNotifier().removeListener(refreshData);
+    super.dispose();
   }
 
   Future<void> _loadData() async {
@@ -474,8 +482,10 @@ class DashboardScreenState extends State<DashboardScreen> {
                 child: Text('No recent investments'),
               )
             else
-              ...recentInvestments.map((investment) => 
-                _buildRecentInvestmentItem(context, investment)),
+              Column(
+                children: recentInvestments.map((investment) => 
+                  _buildRecentInvestmentItem(context, investment)).toList(),
+              ),
           ],
         ),
       ),

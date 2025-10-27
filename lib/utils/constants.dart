@@ -14,6 +14,7 @@ class AppConstants {
   static const Color npsColor = Color(0xFF607D8B);
   static const Color sgbColor = Color(0xFFFF9800);
   static const Color rdColor = Color(0xFF00BCD4);
+  static const Color loanColor = Color(0xFFE91E63);
   
   // Investment Types
   static const String fixedDeposit = 'Fixed Deposit';
@@ -22,6 +23,7 @@ class AppConstants {
   static const String nps = 'NPS';
   static const String sgb = 'Sovereign Gold Bond';
   static const String recurringDeposit = 'Recurring Deposit';
+  static const String loanToFriend = 'Loan to Friend';
   
   static const List<String> investmentTypes = [
     fixedDeposit,
@@ -30,6 +32,7 @@ class AppConstants {
     nps,
     sgb,
     recurringDeposit,
+    loanToFriend,
   ];
   
   // Database

@@ -232,6 +232,35 @@ class CalculationService {
           );
         }
         break;
+        
+      case AppConstants.loanToFriend:
+        if (investment.additionalData != null && investment.interestRate != null) {
+          final originalAmount = double.tryParse(
+            investment.additionalData!['original_amount'] ?? '0'
+          ) ?? 0;
+          
+          // Parse repayments
+          final repaymentData = investment.additionalData!['repayments'] ?? '';
+          final repayments = <Map<String, dynamic>>[];
+          
+          if (repaymentData.isNotEmpty) {
+            repayments.addAll(repaymentData.split('|').map((r) {
+              final parts = r.split(':');
+              return {
+                'date': DateTime.fromMillisecondsSinceEpoch(int.parse(parts[0])),
+                'amount': double.parse(parts[1]),
+              };
+            }));
+          }
+          
+          return calculateLoanOutstanding(
+            originalAmount: originalAmount,
+            monthlyInterestRate: investment.interestRate!,
+            loanStartDate: investment.startDate,
+            repayments: repayments,
+          );
+        }
+        break;
     }
     
     return investment.amount; // Return principal if calculation not possible
@@ -302,5 +331,76 @@ class CalculationService {
       endingValue: currentValue,
       years: years,
     );
+  }
+
+  // Calculate loan outstanding amount with monthly compound interest
+  static double calculateLoanOutstanding({
+    required double originalAmount,
+    required double monthlyInterestRate,
+    required DateTime loanStartDate,
+    required List<Map<String, dynamic>> repayments,
+    DateTime? asOfDate,
+  }) {
+    final calculationDate = asOfDate ?? DateTime.now();
+    double outstanding = originalAmount;
+    
+    print('=== LOAN CALCULATION START ===');
+    print('Original Amount: $originalAmount');
+    print('Monthly Interest Rate: $monthlyInterestRate%');
+    print('Loan Start Date: $loanStartDate');
+    print('Calculation Date: $calculationDate');
+    print('Repayments: $repayments');
+    
+    // Sort repayments by date
+    final sortedRepayments = List<Map<String, dynamic>>.from(repayments)
+      ..sort((a, b) => (a['date'] as DateTime).compareTo(b['date'] as DateTime));
+    
+    DateTime currentDate = loanStartDate;
+    
+    for (final repayment in sortedRepayments) {
+      final repaymentDate = repayment['date'] as DateTime;
+      final repaymentAmount = repayment['amount'] as double;
+      
+      // Calculate interest from current date to repayment date
+      final monthsElapsed = _calculateMonthsBetween(currentDate, repaymentDate);
+      print('Months from $currentDate to $repaymentDate: $monthsElapsed');
+      
+      if (monthsElapsed > 0) {
+        final beforeInterest = outstanding;
+        outstanding = outstanding * pow(1 + monthlyInterestRate / 100, monthsElapsed);
+        print('Interest applied: $beforeInterest -> $outstanding');
+      }
+      
+      // Apply repayment
+      print('Applying repayment of $repaymentAmount');
+      outstanding -= repaymentAmount;
+      print('Outstanding after repayment: $outstanding');
+      currentDate = repaymentDate;
+    }
+    
+    // Calculate interest from last repayment date to calculation date
+    final finalMonthsElapsed = _calculateMonthsBetween(currentDate, calculationDate);
+    print('Final months from $currentDate to $calculationDate: $finalMonthsElapsed');
+    
+    if (finalMonthsElapsed > 0) {
+      final beforeFinalInterest = outstanding;
+      outstanding = outstanding * pow(1 + monthlyInterestRate / 100, finalMonthsElapsed);
+      print('Final interest applied: $beforeFinalInterest -> $outstanding');
+    }
+    
+    final result = outstanding.clamp(0.0, double.infinity);
+    print('Final Outstanding: $result');
+    print('=== LOAN CALCULATION END ===');
+    
+    return result;
+  }
+  
+  // Helper method to calculate months between dates
+  static double _calculateMonthsBetween(DateTime start, DateTime end) {
+    final years = end.year - start.year;
+    final months = end.month - start.month;
+    final days = end.day - start.day;
+    
+    return years * 12 + months + (days / 30.0); // Approximate days to months
   }
 }

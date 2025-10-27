@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/investment_list_screen.dart';
 import 'screens/add_investment_screen.dart';
@@ -7,6 +6,7 @@ import 'screens/goals_screen.dart';
 import 'screens/maturity_calendar_screen.dart';
 import 'services/database_service.dart';
 import 'utils/constants.dart';
+import 'utils/refresh_notifier.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -44,6 +44,18 @@ class _MainScreenState extends State<MainScreen> {
   void initState() {
     super.initState();
     _initializeApp();
+    RefreshNotifier().addListener(_refreshAllScreens);
+  }
+
+  @override
+  void dispose() {
+    RefreshNotifier().removeListener(_refreshAllScreens);
+    super.dispose();
+  }
+
+  void _refreshAllScreens() {
+    _dashboardKey.currentState?.refreshData();
+    _investmentListKey.currentState?.refreshData();
   }
 
   Future<void> _initializeApp() async {

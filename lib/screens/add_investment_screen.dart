@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import '../models/investment.dart';
 import '../services/database_service.dart';
 import '../utils/constants.dart';
+import '../utils/refresh_notifier.dart';
 
 class AddInvestmentScreen extends StatefulWidget {
   final Investment? investment;
@@ -21,6 +22,7 @@ class _AddInvestmentScreenState extends State<AddInvestmentScreen> {
   final _nameController = TextEditingController();
   final _amountController = TextEditingController();
   final _interestRateController = TextEditingController();
+  final _friendNameController = TextEditingController();
   
   String _selectedType = AppConstants.fixedDeposit;
   DateTime _startDate = DateTime.now();
@@ -186,6 +188,7 @@ class _AddInvestmentScreenState extends State<AddInvestmentScreen> {
               if (_selectedType == AppConstants.recurringDeposit) ..._buildRDFields(),
               if (_selectedType == AppConstants.sgb) ..._buildSGBFields(),
               if (_selectedType == AppConstants.nps) ..._buildNPSFields(),
+              if (_selectedType == AppConstants.loanToFriend) ..._buildLoanFields(),
               
               // Calculation Preview
               if (_shouldShowCalculation()) _buildCalculationPreview(),
@@ -225,6 +228,12 @@ class _AddInvestmentScreenState extends State<AddInvestmentScreen> {
         startDate: _startDate,
         maturityDate: _maturityDate,
         interestRate: interestRate,
+        additionalData: _selectedType == AppConstants.loanToFriend ? {
+          'friend_name': _friendNameController.text.trim(),
+          'original_amount': _amountController.text,
+          'outstanding_amount': _amountController.text,
+          'repayments': '',
+        } : null,
       );
 
       final result = await _databaseService.insertInvestment(investment);
@@ -239,7 +248,9 @@ class _AddInvestmentScreenState extends State<AddInvestmentScreen> {
         _nameController.clear();
         _amountController.clear();
         _interestRateController.clear();
-        // Notify parent about the new investment
+        _friendNameController.clear();
+        // Notify about data change
+        RefreshNotifier().notifyDataChanged();
         widget.onInvestmentAdded?.call();
       }
     } catch (e) {
@@ -471,6 +482,10 @@ class _AddInvestmentScreenState extends State<AddInvestmentScreen> {
         _maturityDate = null; // No fixed maturity
         _interestRateController.text = '12.0'; // Expected returns
         break;
+      case AppConstants.loanToFriend:
+        _maturityDate = null; // No fixed maturity
+        _interestRateController.text = '12.0'; // Monthly interest rate
+        break;
       default:
         _maturityDate = null;
         _interestRateController.clear();
@@ -500,6 +515,8 @@ class _AddInvestmentScreenState extends State<AddInvestmentScreen> {
         return 'Expected returns: 8% - 12% p.a.';
       case AppConstants.sip:
         return 'Expected returns: 10% - 15% p.a.';
+      case AppConstants.loanToFriend:
+        return 'Monthly interest rate: 1% - 3% per month';
       default:
         return 'Annual interest/return rate';
     }
@@ -665,11 +682,53 @@ class _AddInvestmentScreenState extends State<AddInvestmentScreen> {
     );
   }
 
+  List<Widget> _buildLoanFields() {
+    return [
+      const SizedBox(height: 16),
+      TextFormField(
+        controller: _friendNameController,
+        decoration: const InputDecoration(
+          labelText: 'Friend Name *',
+          border: OutlineInputBorder(),
+          prefixIcon: Icon(Icons.person),
+        ),
+        validator: (value) {
+          if (value == null || value.trim().isEmpty) {
+            return 'Please enter friend name';
+          }
+          return null;
+        },
+      ),
+      const SizedBox(height: 16),
+      Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppConstants.loanColor.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppConstants.loanColor.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.info_outline, color: AppConstants.loanColor, size: 20),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                'Track money lent to friends. Interest rate is monthly. You can record repayments later.',
+                style: TextStyle(fontSize: 12),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ];
+  }
+
   @override
   void dispose() {
     _nameController.dispose();
     _amountController.dispose();
     _interestRateController.dispose();
+    _friendNameController.dispose();
     super.dispose();
   }
 }

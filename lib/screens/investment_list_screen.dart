@@ -3,6 +3,7 @@ import '../models/investment.dart';
 import '../services/database_service.dart';
 import '../widgets/investment_card.dart';
 import '../utils/constants.dart';
+import '../utils/refresh_notifier.dart';
 import 'add_investment_screen.dart';
 
 class InvestmentListScreen extends StatefulWidget {
@@ -16,7 +17,6 @@ class InvestmentListScreenState extends State<InvestmentListScreen> {
   void refreshData() {
     _loadInvestments();
   }
-
 
   final DatabaseService _databaseService = DatabaseService();
   List<Investment> _investments = [];
@@ -34,6 +34,13 @@ class InvestmentListScreenState extends State<InvestmentListScreen> {
   void initState() {
     super.initState();
     _loadInvestments();
+    RefreshNotifier().addListener(refreshData);
+  }
+
+  @override
+  void dispose() {
+    RefreshNotifier().removeListener(refreshData);
+    super.dispose();
   }
 
   Future<void> _loadInvestments() async {
@@ -59,12 +66,10 @@ class InvestmentListScreenState extends State<InvestmentListScreen> {
   void _applyFilters() {
     List<Investment> filtered = _investments;
 
-    // Apply type filter
     if (_selectedFilter != 'All') {
       filtered = filtered.where((inv) => inv.type == _selectedFilter).toList();
     }
 
-    // Apply search filter
     if (_searchQuery.isNotEmpty) {
       filtered = filtered.where((inv) =>
           inv.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
@@ -99,6 +104,7 @@ class InvestmentListScreenState extends State<InvestmentListScreen> {
     if (confirmed == true) {
       try {
         await _databaseService.deleteInvestment(investment.id!);
+        RefreshNotifier().notifyDataChanged();
         await _loadInvestments();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -150,12 +156,10 @@ class InvestmentListScreenState extends State<InvestmentListScreen> {
       ),
       body: Column(
         children: [
-          // Search and Filter Section
           Container(
             padding: const EdgeInsets.all(16),
             child: Column(
               children: [
-                // Search Bar
                 TextField(
                   decoration: InputDecoration(
                     hintText: 'Search investments...',
@@ -174,8 +178,6 @@ class InvestmentListScreenState extends State<InvestmentListScreen> {
                   },
                 ),
                 const SizedBox(height: 12),
-                
-                // Filter Chips
                 SizedBox(
                   height: 40,
                   child: ListView.builder(
@@ -206,8 +208,6 @@ class InvestmentListScreenState extends State<InvestmentListScreen> {
               ],
             ),
           ),
-          
-          // Investment List
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
@@ -221,7 +221,9 @@ class InvestmentListScreenState extends State<InvestmentListScreen> {
                             final investment = _filteredInvestments[index];
                             return InvestmentCard(
                               investment: investment,
-                              onTap: () => _showInvestmentDetails(investment),
+                              onTap: investment.type == AppConstants.loanToFriend 
+                                  ? () => _loadInvestments() // Refresh when returning from loan details
+                                  : () => _showInvestmentDetails(investment),
                             );
                           },
                         ),
@@ -285,162 +287,46 @@ class InvestmentListScreenState extends State<InvestmentListScreen> {
   }
 
   void _showInvestmentDetails(Investment investment) {
-    showModalBottomSheet(
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.7,
-        maxChildSize: 0.9,
-        minChildSize: 0.5,
-        expand: false,
-        builder: (context, scrollController) {
-          return _InvestmentDetailsSheet(
-            investment: investment,
-            scrollController: scrollController,
-            onEdit: () {
-              Navigator.of(context).pop();
+      builder: (context) => AlertDialog(
+        title: Text(investment.name),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Type: ${investment.type}'),
+            Text('Amount: ₹${investment.amount.toStringAsFixed(0)}'),
+            Text('Start Date: ${investment.startDate.day}/${investment.startDate.month}/${investment.startDate.year}'),
+            if (investment.maturityDate != null)
+              Text('Maturity: ${investment.maturityDate!.day}/${investment.maturityDate!.month}/${investment.maturityDate!.year}'),
+            if (investment.interestRate != null)
+              Text('Interest Rate: ${investment.interestRate}%'),
+            Text('Status: ${investment.status}'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
               _editInvestment(investment);
             },
-            onDelete: () {
-              Navigator.of(context).pop();
+            child: const Text('Edit'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
               _deleteInvestment(investment);
             },
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _InvestmentDetailsSheet extends StatelessWidget {
-  final Investment investment;
-  final ScrollController scrollController;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
-
-  const _InvestmentDetailsSheet({
-    required this.investment,
-    required this.scrollController,
-    required this.onEdit,
-    required this.onDelete,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Handle bar
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-          
-          // Header
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      investment.name,
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      investment.type,
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: _getInvestmentColor(investment.type),
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              PopupMenuButton<String>(
-                onSelected: (value) {
-                  if (value == 'edit') {
-                    onEdit();
-                  } else if (value == 'delete') {
-                    onDelete();
-                  }
-                },
-                itemBuilder: (context) => [
-                  const PopupMenuItem(
-                    value: 'edit',
-                    child: Row(
-                      children: [
-                        Icon(Icons.edit, size: 20),
-                        SizedBox(width: 8),
-                        Text('Edit'),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'delete',
-                    child: Row(
-                      children: [
-                        Icon(Icons.delete, size: 20, color: Colors.red),
-                        SizedBox(width: 8),
-                        Text('Delete', style: TextStyle(color: Colors.red)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          
-          const SizedBox(height: 24),
-          
-          // Details content would go here
-          Expanded(
-            child: SingleChildScrollView(
-              controller: scrollController,
-              child: const Column(
-                children: [
-                  // Add detailed investment information here
-                  Text('Investment details will be displayed here'),
-                ],
-              ),
-            ),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
           ),
         ],
       ),
     );
-  }
-
-  Color _getInvestmentColor(String type) {
-    switch (type) {
-      case AppConstants.fixedDeposit:
-        return AppConstants.fdColor;
-      case AppConstants.sip:
-        return AppConstants.sipColor;
-      case AppConstants.ppf:
-        return AppConstants.ppfColor;
-      case AppConstants.nps:
-        return AppConstants.npsColor;
-      case AppConstants.sgb:
-        return AppConstants.sgbColor;
-      case AppConstants.recurringDeposit:
-        return AppConstants.rdColor;
-      default:
-        return AppConstants.primaryColor;
-    }
   }
 }

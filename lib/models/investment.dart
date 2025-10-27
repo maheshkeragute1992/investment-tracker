@@ -67,11 +67,15 @@ class Investment {
   // Helper method to convert String back to Map
   static Map<String, dynamic> _stringToMap(String str) {
     final Map<String, dynamic> result = {};
-    final pairs = str.split('|');
+    if (str.isEmpty) return result;
+    
+    final pairs = str.split('|').where((pair) => pair.isNotEmpty).toList();
     for (final pair in pairs) {
       final keyValue = pair.split(':');
-      if (keyValue.length == 2) {
-        result[keyValue[0]] = keyValue[1];
+      if (keyValue.length >= 2) {
+        final key = keyValue[0];
+        final value = keyValue.sublist(1).join(':'); // Handle values with colons
+        result[key] = value;
       }
     }
     return result;
@@ -98,7 +102,11 @@ class Investment {
       maturityDate: maturityDate ?? this.maturityDate,
       interestRate: interestRate ?? this.interestRate,
       status: status ?? this.status,
-      additionalData: additionalData ?? this.additionalData,
+      additionalData: additionalData != null 
+          ? Map<String, dynamic>.from(additionalData)
+          : this.additionalData != null 
+              ? Map<String, dynamic>.from(this.additionalData!)
+              : null,
     );
   }
 
@@ -257,6 +265,34 @@ class RecurringDeposit extends Investment {
       'monthly_amount': monthlyAmount.toString(),
       'tenure_months': tenureMonths.toString(),
       'maturity_value': maturityValue.toString(),
+    },
+  );
+}
+
+class LoanToFriend extends Investment {
+  final String friendName;
+  final double originalAmount;
+  final double outstandingAmount;
+  final List<Map<String, dynamic>> repayments;
+
+  LoanToFriend({
+    super.id,
+    required super.name,
+    required this.friendName,
+    required this.originalAmount,
+    required this.outstandingAmount,
+    required super.startDate,
+    required super.interestRate,
+    required this.repayments,
+    super.status,
+  }) : super(
+    type: 'Loan to Friend',
+    amount: outstandingAmount,
+    additionalData: {
+      'friend_name': friendName,
+      'original_amount': originalAmount.toString(),
+      'outstanding_amount': outstandingAmount.toString(),
+      'repayments': repayments.map((r) => '${r['date']}:${r['amount']}').join('|'),
     },
   );
 }

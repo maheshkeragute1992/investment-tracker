@@ -1,5 +1,5 @@
 [build]
-  command = "curl -fsSL https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.16.0-stable.tar.xz | tar -xJ && export PATH=$PATH:$PWD/flutter/bin && flutter config --enable-web && flutter pub get && flutter build web"
+  command = "bash build.sh"
   publish = "build/web"
 
 [build.environment]

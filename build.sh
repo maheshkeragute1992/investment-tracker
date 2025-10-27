@@ -1,11 +1,12 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -e
 
-# Download and extract Flutter 3.35.7
-curl -fsSL https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.35.7-stable.tar.xz | tar -xJ
+# Install Flutter stable channel
+git clone https://github.com/flutter/flutter.git -b stable --depth 1 flutter_sdk
+export PATH="$PWD/flutter_sdk/bin:$PATH"
 
-# Add Flutter to PATH
-export PATH="$PATH:$PWD/flutter/bin"
+# Show version to verify
+flutter --version
 
 # Configure Flutter for web
 flutter config --enable-web --no-analytics

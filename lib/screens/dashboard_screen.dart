@@ -493,7 +493,7 @@ class DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildRecentInvestmentItem(BuildContext context, Investment investment) {
-    final currentValue = CalculationService.calculateCurrentValue(investment);
+    final currentValue = investment.amount;
     final returns = currentValue - investment.amount;
 
     return Padding(

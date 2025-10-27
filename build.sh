@@ -2,7 +2,13 @@
 set -e
 
 # Install Flutter stable channel
-git clone https://github.com/flutter/flutter.git -b stable --depth 1 flutter_sdk
+if [ -d "flutter_sdk/.git" ]; then
+  echo "flutter_sdk exists — fetching latest"
+  git -C flutter_sdk fetch --all --prune
+  git -C flutter_sdk reset --hard origin/stable
+else
+  git clone https://github.com/flutter/flutter.git -b stable --depth 1 flutter_sdk
+fi
 export PATH="$PWD/flutter_sdk/bin:$PATH"
 
 # Show version to verify

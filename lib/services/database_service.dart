@@ -1,5 +1,3 @@
-import 'package:sqflite/sqflite.dart';
-import 'package:path/path.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
@@ -9,261 +7,158 @@ import '../models/notification.dart';
 import '../utils/constants.dart';
 
 class DatabaseService {
-  static Database? _database;
   static SharedPreferences? _prefs;
   static final DatabaseService _instance = DatabaseService._internal();
   
   factory DatabaseService() => _instance;
   DatabaseService._internal();
 
-  Future<Database> get database async {
-    if (kIsWeb) {
-      throw UnsupportedError('SQLite not supported on web');
-    }
-    _database ??= await _initDatabase();
-    return _database!;
-  }
-
-  Future<SharedPreferences> get _webStorage async {
+  Future<SharedPreferences> get _storage async {
     _prefs ??= await SharedPreferences.getInstance();
     return _prefs!;
   }
 
-  Future<Database> _initDatabase() async {
-    final dbPath = await getDatabasesPath();
-    final path = join(dbPath, AppConstants.dbName);
-
-    return await openDatabase(
-      path,
-      version: AppConstants.dbVersion,
-      onCreate: _createTables,
-      onUpgrade: _upgradeDatabase,
-    );
-  }
-
-  Future<void> _createTables(Database db, int version) async {
-    // Create investments table
-    await db.execute('''
-      CREATE TABLE ${AppConstants.investmentsTable} (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        type TEXT NOT NULL,
-        name TEXT NOT NULL,
-        amount REAL NOT NULL,
-        start_date INTEGER NOT NULL,
-        maturity_date INTEGER,
-        interest_rate REAL,
-        status TEXT DEFAULT 'Active',
-        additional_data TEXT,
-        created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000),
-        updated_at INTEGER DEFAULT (strftime('%s', 'now') * 1000)
-      )
-    ''');
-
-    // Create goals table
-    await db.execute('''
-      CREATE TABLE ${AppConstants.goalsTable} (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        target_amount REAL NOT NULL,
-        target_date INTEGER NOT NULL,
-        current_progress REAL DEFAULT 0.0,
-        description TEXT,
-        category TEXT DEFAULT 'General',
-        created_date INTEGER NOT NULL,
-        is_completed INTEGER DEFAULT 0,
-        created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000),
-        updated_at INTEGER DEFAULT (strftime('%s', 'now') * 1000)
-      )
-    ''');
-
-    // Create notifications table
-    await db.execute('''
-      CREATE TABLE ${AppConstants.notificationsTable} (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        investment_id INTEGER NOT NULL,
-        title TEXT NOT NULL,
-        message TEXT NOT NULL,
-        notification_date INTEGER NOT NULL,
-        type TEXT NOT NULL,
-        is_read INTEGER DEFAULT 0,
-        is_scheduled INTEGER DEFAULT 0,
-        created_date INTEGER NOT NULL,
-        created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000),
-        updated_at INTEGER DEFAULT (strftime('%s', 'now') * 1000),
-        FOREIGN KEY (investment_id) REFERENCES ${AppConstants.investmentsTable} (id) ON DELETE CASCADE
-      )
-    ''');
-
-    // Create indexes for better performance
-    await db.execute('CREATE INDEX idx_investments_type ON ${AppConstants.investmentsTable}(type)');
-    await db.execute('CREATE INDEX idx_investments_status ON ${AppConstants.investmentsTable}(status)');
-    await db.execute('CREATE INDEX idx_investments_maturity ON ${AppConstants.investmentsTable}(maturity_date)');
-    await db.execute('CREATE INDEX idx_goals_target_date ON ${AppConstants.goalsTable}(target_date)');
-    await db.execute('CREATE INDEX idx_notifications_date ON ${AppConstants.notificationsTable}(notification_date)');
-    await db.execute('CREATE INDEX idx_notifications_read ON ${AppConstants.notificationsTable}(is_read)');
-  }
-
-  Future<void> _upgradeDatabase(Database db, int oldVersion, int newVersion) async {
-    // Handle database upgrades here
-    if (oldVersion < 2) {
-      // Add new columns or tables for version 2
-    }
-  }
-
   // Investment CRUD Operations
   Future<int> insertInvestment(Investment investment) async {
-    if (kIsWeb) {
-      final prefs = await _webStorage;
-      final investments = await getAllInvestments();
-      final counter = prefs.getInt('counter') ?? 0;
-      final newId = counter + 1;
-      
-      final newInvestment = Investment(
-        id: newId,
-        type: investment.type,
-        name: investment.name,
-        amount: investment.amount,
-        startDate: investment.startDate,
-        maturityDate: investment.maturityDate,
-        interestRate: investment.interestRate,
-        status: investment.status,
-        additionalData: investment.additionalData,
-      );
-      
-      investments.add(newInvestment);
-      final jsonList = investments.map((inv) => inv.toMap()).toList();
-      await prefs.setString('investments', json.encode(jsonList));
-      await prefs.setInt('counter', newId);
-      return newId;
-    }
+    final prefs = await _storage;
+    final investments = await getAllInvestments();
+    final counter = prefs.getInt('counter') ?? 0;
+    final newId = counter + 1;
     
-    final db = await database;
-    final map = investment.toMap();
-    map['created_at'] = DateTime.now().millisecondsSinceEpoch;
-    map['updated_at'] = DateTime.now().millisecondsSinceEpoch;
-    return await db.insert(AppConstants.investmentsTable, map);
+    final newInvestment = Investment(
+      id: newId,
+      type: investment.type,
+      name: investment.name,
+      amount: investment.amount,
+      startDate: investment.startDate,
+      maturityDate: investment.maturityDate,
+      interestRate: investment.interestRate,
+      status: investment.status,
+      additionalData: investment.additionalData,
+    );
+    
+    investments.add(newInvestment);
+    final jsonList = investments.map((inv) => inv.toMap()).toList();
+    await prefs.setString('investments', json.encode(jsonList));
+    await prefs.setInt('counter', newId);
+    return newId;
   }
 
   Future<List<Investment>> getAllInvestments() async {
-    if (kIsWeb) {
-      final prefs = await _webStorage;
-      final jsonString = prefs.getString('investments') ?? '[]';
-      final List<dynamic> jsonList = json.decode(jsonString);
-      final investments = jsonList.map((json) => Investment.fromMap(json)).toList();
-      investments.sort((a, b) => (b.id ?? 0).compareTo(a.id ?? 0));
-      return investments;
-    }
-    
-    final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      AppConstants.investmentsTable,
-      orderBy: 'created_at DESC',
-    );
-    return List.generate(maps.length, (i) => Investment.fromMap(maps[i]));
+    final prefs = await _storage;
+    final jsonString = prefs.getString('investments') ?? '[]';
+    final List<dynamic> jsonList = json.decode(jsonString);
+    final investments = jsonList.map((json) => Investment.fromMap(json)).toList();
+    investments.sort((a, b) => (b.id ?? 0).compareTo(a.id ?? 0));
+    return investments;
   }
 
   Future<List<Investment>> getInvestmentsByType(String type) async {
-    final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      AppConstants.investmentsTable,
-      where: 'type = ?',
-      whereArgs: [type],
-      orderBy: 'created_at DESC',
-    );
-    return List.generate(maps.length, (i) => Investment.fromMap(maps[i]));
+    final investments = await getAllInvestments();
+    return investments.where((inv) => inv.type == type).toList();
   }
 
   Future<List<Investment>> getActiveInvestments() async {
-    if (kIsWeb) {
-      final investments = await getAllInvestments();
-      return investments.where((inv) => inv.status == 'Active').toList();
-    }
-    
-    final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      AppConstants.investmentsTable,
-      where: 'status = ?',
-      whereArgs: ['Active'],
-      orderBy: 'created_at DESC',
-    );
-    return List.generate(maps.length, (i) => Investment.fromMap(maps[i]));
+    final investments = await getAllInvestments();
+    return investments.where((inv) => inv.status == 'Active').toList();
   }
 
   Future<Investment?> getInvestmentById(int id) async {
-    final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      AppConstants.investmentsTable,
-      where: 'id = ?',
-      whereArgs: [id],
-    );
-    if (maps.isNotEmpty) {
-      return Investment.fromMap(maps.first);
+    final investments = await getAllInvestments();
+    try {
+      return investments.firstWhere((inv) => inv.id == id);
+    } catch (e) {
+      return null;
     }
-    return null;
   }
 
   Future<int> updateInvestment(Investment investment) async {
-    final db = await database;
-    final map = investment.toMap();
-    map['updated_at'] = DateTime.now().millisecondsSinceEpoch;
-    return await db.update(
-      AppConstants.investmentsTable,
-      map,
-      where: 'id = ?',
-      whereArgs: [investment.id],
-    );
+    final prefs = await _storage;
+    final investments = await getAllInvestments();
+    final index = investments.indexWhere((inv) => inv.id == investment.id);
+    if (index != -1) {
+      investments[index] = investment;
+      final jsonList = investments.map((inv) => inv.toMap()).toList();
+      await prefs.setString('investments', json.encode(jsonList));
+      return 1;
+    }
+    return 0;
   }
 
   Future<int> deleteInvestment(int id) async {
-    if (kIsWeb) {
-      final prefs = await _webStorage;
-      final investments = await getAllInvestments();
-      final initialLength = investments.length;
-      investments.removeWhere((inv) => inv.id == id);
-      if (investments.length < initialLength) {
-        final jsonList = investments.map((inv) => inv.toMap()).toList();
-        await prefs.setString('investments', json.encode(jsonList));
-        return 1;
-      }
-      return 0;
+    final prefs = await _storage;
+    final investments = await getAllInvestments();
+    final initialLength = investments.length;
+    investments.removeWhere((inv) => inv.id == id);
+    if (investments.length < initialLength) {
+      final jsonList = investments.map((inv) => inv.toMap()).toList();
+      await prefs.setString('investments', json.encode(jsonList));
+      return 1;
     }
-    
-    final db = await database;
-    return await db.delete(
-      AppConstants.investmentsTable,
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    return 0;
   }
 
   // Goal CRUD Operations
   Future<int> insertGoal(Goal goal) async {
-    if (kIsWeb) {
-      final prefs = await _webStorage;
-      final goals = await getAllGoals();
-      final counter = prefs.getInt('counter') ?? 0;
-      final newId = counter + 1;
-      
-      final newGoal = Goal(
-        id: newId,
-        name: goal.name,
-        targetAmount: goal.targetAmount,
-        targetDate: goal.targetDate,
-        currentProgress: goal.currentProgress,
-        description: goal.description,
-        category: goal.category,
-        createdDate: goal.createdDate,
-        isCompleted: goal.isCompleted,
-      );
-      
-      goals.add(newGoal);
+    final prefs = await _storage;
+    final goals = await getAllGoals();
+    final counter = prefs.getInt('counter') ?? 0;
+    final newId = counter + 1;
+    
+    final newGoal = Goal(
+      id: newId,
+      name: goal.name,
+      targetAmount: goal.targetAmount,
+      targetDate: goal.targetDate,
+      currentProgress: goal.currentProgress,
+      description: goal.description,
+      category: goal.category,
+      createdDate: goal.createdDate,
+      isCompleted: goal.isCompleted,
+    );
+    
+    goals.add(newGoal);
+    final jsonList = goals.map((g) => g.toMap()).toList();
+    await prefs.setString('goals', json.encode(jsonList));
+    await prefs.setInt('counter', newId);
+    return newId;
+  }
+
+  Future<List<Goal>> getAllGoals() async {
+    final prefs = await _storage;
+    final jsonString = prefs.getString('goals') ?? '[]';
+    final List<dynamic> jsonList = json.decode(jsonString);
+    final goals = jsonList.map((json) => Goal.fromMap(json)).toList();
+    goals.sort((a, b) => (b.id ?? 0).compareTo(a.id ?? 0));
+    return goals;
+  }
+
+  Future<int> updateGoal(Goal goal) async {
+    final prefs = await _storage;
+    final goals = await getAllGoals();
+    final index = goals.indexWhere((g) => g.id == goal.id);
+    if (index != -1) {
+      goals[index] = goal;
       final jsonList = goals.map((g) => g.toMap()).toList();
       await prefs.setString('goals', json.encode(jsonList));
-      await prefs.setInt('counter', newId);
-      return newId;
+      return 1;
     }
-    
-    final db = await database;
+    return 0;
+  }
+
+  Future<int> deleteGoal(int id) async {
+    final prefs = await _storage;
+    final goals = await getAllGoals();
+    final initialLength = goals.length;
+    goals.removeWhere((g) => g.id == id);
+    if (goals.length < initialLength) {
+      final jsonList = goals.map((g) => g.toMap()).toList();
+      await prefs.setString('goals', json.encode(jsonList));
+      return 1;
+    }
+    return 0;
+  }
+}
     final map = goal.toMap();
     map['created_at'] = DateTime.now().millisecondsSinceEpoch;
     map['updated_at'] = DateTime.now().millisecondsSinceEpoch;
